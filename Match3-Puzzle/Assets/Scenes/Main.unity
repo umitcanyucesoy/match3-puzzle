@@ -172,7 +172,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.1764706, g: 0.09019608, b: 0.2784314, a: 1}
+  m_Color: {r: 0.6693237, g: 0.6529459, b: 0.6886792, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -635,6 +635,12 @@ MonoBehaviour:
   height: 9
   borderSize: 2
   tilePrefab: {fileID: 427960725293189429, guid: 556d70fc8a1b849029cdab7e0f67aba9, type: 3}
+  gamePiecePrefabs:
+  - {fileID: 6177473201585886185, guid: 141ef69c4646b429e98d902850f3a542, type: 3}
+  - {fileID: -182645140405285293, guid: 7f13b7a8e63bf4ec2b4edfabdea4b267, type: 3}
+  - {fileID: -7293638479801723256, guid: 7fcf49a69c80f46899ae6f9ba2b193c1, type: 3}
+  - {fileID: -4165267687103307907, guid: c51e0cdbd20a64f36b1281b112ab8da5, type: 3}
+  - {fileID: 8312305885955116946, guid: faa786fbd36b34ae6a7473b76fe06f03, type: 3}
 --- !u!114 &1476906629
 MonoBehaviour:
   m_ObjectHideFlags: 0
