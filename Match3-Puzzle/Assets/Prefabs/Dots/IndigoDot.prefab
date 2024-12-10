@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 7749160853448092564}
   - component: {fileID: -4263029891536504381}
   m_Layer: 0
-  m_Name: PurpleDot
+  m_Name: IndigoDot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -99,3 +99,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   xIndex: 0
   yIndex: 0
+  matchValue: 3

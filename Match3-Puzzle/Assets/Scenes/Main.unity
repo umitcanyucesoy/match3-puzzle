@@ -631,10 +631,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed993546a310f488db26d024bd9c2c8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  swapTime: 0.35
   width: 7
   height: 9
   borderSize: 2
   tilePrefab: {fileID: 427960725293189429, guid: 556d70fc8a1b849029cdab7e0f67aba9, type: 3}
+  gamePieceParent: {fileID: 1476906627}
   gamePiecePrefabs:
   - {fileID: 6177473201585886185, guid: 141ef69c4646b429e98d902850f3a542, type: 3}
   - {fileID: -182645140405285293, guid: 7f13b7a8e63bf4ec2b4edfabdea4b267, type: 3}

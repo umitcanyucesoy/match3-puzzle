@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 8174938077525655698}
   - component: {fileID: -7293638479801723256}
   m_Layer: 0
-  m_Name: PinkDot
+  m_Name: MagentaDot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -99,3 +99,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   xIndex: 0
   yIndex: 0
+  matchValue: 2
