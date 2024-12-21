@@ -2,7 +2,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Cysharp.Threading.Tasks;
 using GameBoard;
+using Unity.Mathematics;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -37,8 +39,7 @@ public class Board : MonoBehaviour
         _mAllPieces = new GamePieces[width, height];
         
         SetupTiles();
-        FillRandomGamePiece();
-        HighlightMatches();
+        FillBoardRandomGamePiece();
     }
 
     private void SetupTiles()
@@ -87,21 +88,56 @@ public class Board : MonoBehaviour
         return (x >= 0 && x < width && y >= 0 && y < height);
     }
 
-    private void FillRandomGamePiece()
+    private void FillBoardRandomGamePiece()
     {
+        int maxIterations = 100;
+        int iterations = 0;
+        
         for (var i = 0; i < width; i++)
         {
             for (var j = 0; j < height; j++)
             {
-                var randomGamePiece = Instantiate(GetRandomGamePiece(), Vector3.zero, Quaternion.identity,gamePieceParent);
-                if (randomGamePiece)
+                GamePieces gamePiece = FillBoardGamePieceAt(i, j);
+
+                while (HasMatchOnFill(i, j))
                 {
-                    randomGamePiece.GetComponent<GamePieces>().Init(this);
-                    PlaceGamePiece(randomGamePiece.GetComponent<GamePieces>(), i, j);
+                    ClearPieceAt(i,j);
+                    gamePiece = FillBoardGamePieceAt(i, j);
+                    iterations++;
+
+                    if (iterations >= maxIterations)
+                    {
+                        iterations = 0;
+                        break;
+                    }
                 }
-                randomGamePiece.name = $"Piece{i},{j}";
             }
         }
+    }
+
+    private GamePieces FillBoardGamePieceAt(int i, int j)
+    {
+        var randomGamePiece = Instantiate(GetRandomGamePiece(), Vector3.zero, Quaternion.identity,gamePieceParent);
+        if (randomGamePiece)
+        {
+            randomGamePiece.GetComponent<GamePieces>().Init(this);
+            PlaceGamePiece(randomGamePiece.GetComponent<GamePieces>(), i, j);
+            randomGamePiece.name = $"Piece{i},{j}";
+            return randomGamePiece.GetComponent<GamePieces>();
+        }
+
+        return null;
+    }
+
+    private bool HasMatchOnFill(int x, int y, int minLength = 3)
+    {
+        List<GamePieces> leftMatches = FindMatches(x,y,new Vector2(-1,0),minLength);
+        List<GamePieces> rightMatches = FindMatches(x,y,new Vector2(0,-1),minLength);
+        
+        leftMatches ??= new List<GamePieces>();
+        rightMatches ??= new List<GamePieces>();
+        
+        return (leftMatches.Count > 0 || rightMatches.Count > 0);
     }
 
     public void ClickTile(Tile tile)
@@ -122,19 +158,40 @@ public class Board : MonoBehaviour
     public void ReleaseToTile()
     {
         if (_clickedTile != null && _targetTile != null)
-            SwitchTiles(_clickedTile,_targetTile);
+            SwitchTiles(_clickedTile,_targetTile).Forget();
         
         _clickedTile = null;
         _targetTile = null;
     }
 
-    private void SwitchTiles(Tile clickedTile, Tile targetTile)
+    private async UniTaskVoid SwitchTiles(Tile clickedTile, Tile targetTile)
     {
         GamePieces clickedPiece = _mAllPieces[clickedTile.xIndex, clickedTile.yIndex];
         GamePieces targetPiece = _mAllPieces[targetTile.xIndex, targetTile.yIndex];
         
         clickedPiece.MovePiece(_targetTile.xIndex, _targetTile.yIndex, swapTime);
         targetPiece.MovePiece(_clickedTile.xIndex, _clickedTile.yIndex, swapTime);
+        
+        await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
+        
+        List<GamePieces> clickedPieceMatches = FindMatchesAt(clickedTile.xIndex, clickedTile.yIndex);
+        List<GamePieces> targetPieceMatches = FindMatchesAt(targetTile.xIndex, targetTile.yIndex);
+
+        if (clickedPieceMatches.Count == 0 && targetPieceMatches.Count == 0)
+        {
+            clickedPiece.MovePiece(clickedTile.xIndex, clickedTile.yIndex, swapTime);
+            targetPiece.MovePiece(targetTile.xIndex, targetTile.yIndex, swapTime);
+        }
+        else
+        {
+            await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
+        
+            ClearPieceAt(clickedPieceMatches);
+            ClearPieceAt(targetPieceMatches);
+            
+            CollapseColumn(clickedPieceMatches);
+            CollapseColumn(targetPieceMatches);
+        }
     }
 
     private bool IsNextTo(Tile start, Tile end)
@@ -171,10 +228,18 @@ public class Board : MonoBehaviour
                 break;
             
             GamePieces nextPiece = _mAllPieces[nextX, nextY];
-            if (nextPiece.matchValue == startPiece.matchValue && !matches.Contains(nextPiece))
-                matches.Add(nextPiece);
-            else
+
+            if (nextPiece == null)
+            {
                 break;
+            }
+            else
+            {
+                if (nextPiece.matchValue == startPiece.matchValue && !matches.Contains(nextPiece))
+                    matches.Add(nextPiece);
+                else
+                    break;
+            }
         }
 
         if (matches.Count >= minLength)
@@ -207,31 +272,137 @@ public class Board : MonoBehaviour
         return (combinedMatches.Count >= minLength) ? combinedMatches : null;
     }
 
+    private List<GamePieces> FindMatchesAt(int x, int y, int minLength = 3)
+    {
+        List<GamePieces> horizontalMatches = FindHorizontalMatches(x, y, minLength);
+        List<GamePieces> verticalMatches = FindVerticalMatches(x, y, minLength);
+        
+        verticalMatches ??= new List<GamePieces>();
+        horizontalMatches ??= new List<GamePieces>();
+        
+        var combinedMatches = horizontalMatches.Union(verticalMatches).ToList();
+        return combinedMatches;
+    }
+
+    private void HighlightTileOff(int x, int y)
+    {
+        SpriteRenderer spriteRenderer = _mAllTiles[x,y].GetComponent<SpriteRenderer>();
+        spriteRenderer.color = new Color(spriteRenderer.color.r, spriteRenderer.color.g, spriteRenderer.color.b);
+    }
+
+    private void HighlightTileOn(int x, int y, Color color)
+    {
+        SpriteRenderer spriteRenderer = _mAllTiles[x,y].GetComponent<SpriteRenderer>();
+        spriteRenderer.color = color;
+    }
+
+    private void HighlightMatchesAt(int x, int y)
+    {
+        HighlightTileOff(x,y);
+        
+        var combinedMatches = FindMatchesAt(x, y);
+        if (combinedMatches.Count > 0)
+        {
+            foreach (var piece in combinedMatches)
+                HighlightTileOn(piece.xIndex,piece.yIndex,piece.GetComponent<SpriteRenderer>().color);
+        }
+    }
+    
     private void HighlightMatches()
     {
         for (int i = 0; i < width; i++)
         {
             for (int j = 0; j < height; j++)
             {
-                SpriteRenderer spriteRenderer = _mAllTiles[i,j].GetComponent<SpriteRenderer>();
-                spriteRenderer.color = new Color(spriteRenderer.color.r, spriteRenderer.color.g, spriteRenderer.color.b);
-
-                List<GamePieces> horizontalMatches = FindHorizontalMatches(i, j, 3);
-                List<GamePieces> verticalMatches = FindVerticalMatches(i, j, 3);
-                
-                verticalMatches ??= new List<GamePieces>();
-                horizontalMatches ??= new List<GamePieces>();
-                
-                var combinedMatches = horizontalMatches.Union(verticalMatches).ToList();
-                if (combinedMatches.Count > 0)
-                {
-                    foreach (var piece in combinedMatches)
-                    {
-                        spriteRenderer = _mAllTiles[piece.xIndex,piece.yIndex].GetComponent<SpriteRenderer>();
-                        spriteRenderer.color = piece.GetComponent<SpriteRenderer>().color;
-                    }
-                }
+                HighlightMatchesAt(i,j);
             }
         }    
     }
+
+    private void ClearPieceAt(int x, int y)
+    {
+        GamePieces pieceToClear = _mAllPieces[x,y];
+
+        if (pieceToClear != null)
+        {
+            _mAllPieces[x,y] = null;
+            Destroy(pieceToClear.gameObject);
+        }
+    }
+    
+    private void ClearPieceAt(List<GamePieces> gamePieces)
+    {
+        foreach (var piece in gamePieces)
+        {
+            ClearPieceAt(piece.xIndex,piece.yIndex);
+        }
+    }
+
+    private void ClearBoard()
+    {
+        for (int i = 0; i < width; i++)
+        {
+            for (int j = 0; j < height; j++)
+            {
+                ClearPieceAt(i,j);
+            }
+        }
+    }
+
+    private List<GamePieces> CollapseColumn(int column, float collapseTime = .1f)
+    {
+        List<GamePieces> movingPieces = new List<GamePieces>();
+
+        for (int i = 0; i < height - 1; i++)
+        {
+            if (_mAllPieces[column, i] == null)
+            {
+                for (int j = i + 1; j < height; j++)
+                {
+                    if (_mAllPieces[column, j] != null)
+                    {
+                        _mAllPieces[column,j].MovePiece(column,i, collapseTime);
+                        _mAllPieces[column,i] = _mAllPieces[column,j];
+                        _mAllPieces[column,i].SetCoordinates(column,i);
+
+                        if (!movingPieces.Contains(_mAllPieces[column,i]))
+                            movingPieces.Add(_mAllPieces[column,i]);
+                        
+                        _mAllPieces[column,j] = null;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        return movingPieces;
+    }
+
+    private List<GamePieces> CollapseColumn(List<GamePieces> gamePieces)
+    {
+        List<GamePieces> movingPieces = new List<GamePieces>();
+        List<int> columnsToCollapse = GetColumns(gamePieces);
+
+        foreach (var column in columnsToCollapse)
+            movingPieces = movingPieces.Union(CollapseColumn(column)).ToList();
+        
+        return movingPieces;
+    }
+
+    private List<int> GetColumns(List<GamePieces> gamePieces)
+    {
+        List<int> columns = new List<int>();
+
+        foreach (var piece in gamePieces)
+        {
+            if (!columns.Contains(piece.xIndex))
+                columns.Add(piece.xIndex);
+        }
+        
+        return columns;
+    }
+    
+    
+    
+    
 }
