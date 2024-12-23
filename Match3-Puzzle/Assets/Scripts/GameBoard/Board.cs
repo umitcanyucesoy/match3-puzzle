@@ -185,12 +185,7 @@ public class Board : MonoBehaviour
         else
         {
             await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
-        
-            ClearPieceAt(clickedPieceMatches);
-            ClearPieceAt(targetPieceMatches);
-            
-            CollapseColumn(clickedPieceMatches);
-            CollapseColumn(targetPieceMatches);
+            ClearAndCollapseBoard(clickedPieceMatches.Union(targetPieceMatches).ToList()).Forget();
         }
     }
 
@@ -283,6 +278,18 @@ public class Board : MonoBehaviour
         var combinedMatches = horizontalMatches.Union(verticalMatches).ToList();
         return combinedMatches;
     }
+    
+    private List<GamePieces> FindMatchesAt(List<GamePieces> gamePieces, int minLength = 3)
+    {
+        List<GamePieces> matches = new List<GamePieces>();
+
+        foreach (GamePieces piece in gamePieces)
+        {
+            matches = matches.Union(FindMatchesAt(piece.xIndex, piece.yIndex, minLength)).ToList();
+        }
+
+        return matches;
+    }
 
     private void HighlightTileOff(int x, int y)
     {
@@ -334,7 +341,8 @@ public class Board : MonoBehaviour
     {
         foreach (var piece in gamePieces)
         {
-            ClearPieceAt(piece.xIndex,piece.yIndex);
+            if (piece != null)
+                ClearPieceAt(piece.xIndex,piece.yIndex);
         }
     }
 
@@ -361,7 +369,7 @@ public class Board : MonoBehaviour
                 {
                     if (_mAllPieces[column, j] != null)
                     {
-                        _mAllPieces[column,j].MovePiece(column,i, collapseTime);
+                        _mAllPieces[column,j].MovePiece(column,i, collapseTime * (j - i));
                         _mAllPieces[column,i] = _mAllPieces[column,j];
                         _mAllPieces[column,i].SetCoordinates(column,i);
 
@@ -378,7 +386,7 @@ public class Board : MonoBehaviour
         return movingPieces;
     }
 
-    private List<GamePieces> CollapseColumn(List<GamePieces> gamePieces)
+    private UniTask<List<GamePieces>> CollapseColumn(List<GamePieces> gamePieces)
     {
         List<GamePieces> movingPieces = new List<GamePieces>();
         List<int> columnsToCollapse = GetColumns(gamePieces);
@@ -386,7 +394,7 @@ public class Board : MonoBehaviour
         foreach (var column in columnsToCollapse)
             movingPieces = movingPieces.Union(CollapseColumn(column)).ToList();
         
-        return movingPieces;
+        return new UniTask<List<GamePieces>>(movingPieces);
     }
 
     private List<int> GetColumns(List<GamePieces> gamePieces)
@@ -401,8 +409,38 @@ public class Board : MonoBehaviour
         
         return columns;
     }
-    
-    
-    
-    
+
+    private async UniTask ClearAndRefillBoard(List<GamePieces> gamePieces)
+    {
+        
+    }
+
+    private async UniTask ClearAndCollapseBoard(List<GamePieces> gamePieces)
+    {
+        List<GamePieces> movingPieces = new List<GamePieces>();
+        List<GamePieces> matches = new List<GamePieces>();
+        await UniTask.Delay(TimeSpan.FromSeconds(0.25f));
+        
+        bool isFinished = false;
+        while (!isFinished)
+        {
+            ClearPieceAt(gamePieces);
+            await UniTask.Delay(250); 
+            
+            movingPieces = await CollapseColumn(gamePieces);
+            await UniTask.Delay(250);
+            
+            matches = FindMatchesAt(movingPieces);
+
+            if (matches.Count == 0)
+            {
+                isFinished = true;
+                break;
+            }
+            else
+                await ClearAndCollapseBoard(matches);
+        }
+
+        await UniTask.Yield();
+    }
 }
