@@ -25,7 +25,9 @@ public class Board : MonoBehaviour
     private GamePieces[,] _mAllPieces;
     private Tile _clickedTile;
     private Tile _targetTile;
-    
+    private bool _isPlayerInputEnabled = true;
+    private bool _isClearAndRefillRunning = false;
+    private bool _isSwitching = false;
     
     public static Board instance;
     private void Awake()
@@ -155,38 +157,49 @@ public class Board : MonoBehaviour
             _targetTile = tile;
     }
 
-    public void ReleaseToTile()
+    public async void ReleaseToTile()
     {
-        if (_clickedTile != null && _targetTile != null)
-            SwitchTiles(_clickedTile,_targetTile).Forget();
-        
+        if (_clickedTile != null && 
+            _targetTile != null && 
+            !_isSwitching &&
+            _isPlayerInputEnabled && 
+            !_isClearAndRefillRunning)
+        {
+            await SwitchTiles(_clickedTile, _targetTile);
+        }
+
         _clickedTile = null;
         _targetTile = null;
     }
 
-    private async UniTaskVoid SwitchTiles(Tile clickedTile, Tile targetTile)
-    {
-        GamePieces clickedPiece = _mAllPieces[clickedTile.xIndex, clickedTile.yIndex];
+    private async UniTask SwitchTiles(Tile clickedTile, Tile targetTile) 
+    { 
+        if (_isSwitching || !_isPlayerInputEnabled || _isClearAndRefillRunning) return;
+        _isPlayerInputEnabled = false; 
+        _isSwitching = true;
+        
+        GamePieces clickedPiece = _mAllPieces[clickedTile.xIndex, clickedTile.yIndex]; 
         GamePieces targetPiece = _mAllPieces[targetTile.xIndex, targetTile.yIndex];
-        
-        clickedPiece.MovePiece(_targetTile.xIndex, _targetTile.yIndex, swapTime);
+
+        clickedPiece.MovePiece(_targetTile.xIndex, _targetTile.yIndex, swapTime); 
         targetPiece.MovePiece(_clickedTile.xIndex, _clickedTile.yIndex, swapTime);
-        
         await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
         
-        List<GamePieces> clickedPieceMatches = FindMatchesAt(clickedTile.xIndex, clickedTile.yIndex);
+        List<GamePieces> clickedPieceMatches = FindMatchesAt(clickedTile.xIndex, clickedTile.yIndex); 
         List<GamePieces> targetPieceMatches = FindMatchesAt(targetTile.xIndex, targetTile.yIndex);
-
-        if (clickedPieceMatches.Count == 0 && targetPieceMatches.Count == 0)
-        {
-            clickedPiece.MovePiece(clickedTile.xIndex, clickedTile.yIndex, swapTime);
+        if (clickedPieceMatches.Count == 0 && targetPieceMatches.Count == 0) 
+        { 
+            clickedPiece.MovePiece(clickedTile.xIndex, clickedTile.yIndex, swapTime); 
             targetPiece.MovePiece(targetTile.xIndex, targetTile.yIndex, swapTime);
         }
-        else
-        {
-            await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
-            ClearAndCollapseBoard(clickedPieceMatches.Union(targetPieceMatches).ToList()).Forget();
+        else 
+        { 
+            await UniTask.Delay(TimeSpan.FromSeconds(swapTime)); 
+            ClearAndRefillBoard(clickedPieceMatches.Union(targetPieceMatches).ToList()).Forget();
         }
+        
+        _isSwitching = false;
+        _isPlayerInputEnabled = true; 
     }
 
     private bool IsNextTo(Tile start, Tile end)
@@ -409,10 +422,19 @@ public class Board : MonoBehaviour
         
         return columns;
     }
-
+    
     private async UniTask ClearAndRefillBoard(List<GamePieces> gamePieces)
     {
+        if (_isClearAndRefillRunning) return;
         
+        _isClearAndRefillRunning = true;
+        _isPlayerInputEnabled = false;
+        
+        await ClearAndCollapseBoard(gamePieces);
+        UniTask.Yield();
+
+        _isPlayerInputEnabled = true;
+        _isClearAndRefillRunning = false;
     }
 
     private async UniTask ClearAndCollapseBoard(List<GamePieces> gamePieces)
