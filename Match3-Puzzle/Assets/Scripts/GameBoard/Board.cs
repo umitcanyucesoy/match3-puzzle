@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
+using DG.Tweening;
 using GameBoard;
 using Unity.Mathematics;
 using UnityEngine;
@@ -90,7 +91,7 @@ public class Board : MonoBehaviour
         return (x >= 0 && x < width && y >= 0 && y < height);
     }
 
-    private void FillBoardRandomGamePiece()
+    private void FillBoardRandomGamePiece(int falseYOffset = 0, float moveTime = .1f)
     {
         int maxIterations = 100;
         int iterations = 0;
@@ -99,25 +100,28 @@ public class Board : MonoBehaviour
         {
             for (var j = 0; j < height; j++)
             {
-                GamePieces gamePiece = FillBoardGamePieceAt(i, j);
-
-                while (HasMatchOnFill(i, j))
+                if (_mAllPieces[i, j] == null)
                 {
-                    ClearPieceAt(i,j);
-                    gamePiece = FillBoardGamePieceAt(i, j);
-                    iterations++;
+                    GamePieces gamePiece = FillBoardGamePieceAt(i, j ,falseYOffset, moveTime);
 
-                    if (iterations >= maxIterations)
+                    while (HasMatchOnFill(i, j))
                     {
-                        iterations = 0;
-                        break;
+                        ClearPieceAt(i, j);
+                        gamePiece = FillBoardGamePieceAt(i, j, falseYOffset, moveTime);
+                        iterations++;
+
+                        if (iterations >= maxIterations)
+                        {
+                            iterations = 0;
+                            break;
+                        }
                     }
                 }
             }
         }
     }
 
-    private GamePieces FillBoardGamePieceAt(int i, int j)
+    private GamePieces FillBoardGamePieceAt(int i, int j, int falseYOffset = 0, float moveTime = 0.1f)
     {
         var randomGamePiece = Instantiate(GetRandomGamePiece(), Vector3.zero, Quaternion.identity,gamePieceParent);
         if (randomGamePiece)
@@ -125,6 +129,13 @@ public class Board : MonoBehaviour
             randomGamePiece.GetComponent<GamePieces>().Init(this);
             PlaceGamePiece(randomGamePiece.GetComponent<GamePieces>(), i, j);
             randomGamePiece.name = $"Piece{i},{j}";
+
+            if (falseYOffset != 0)
+            {
+                randomGamePiece.transform.position = new Vector3(i, j + falseYOffset, 0);
+                randomGamePiece.GetComponent<GamePieces>().MovePiece(i,j,moveTime);
+            }
+            
             return randomGamePiece.GetComponent<GamePieces>();
         }
 
@@ -345,6 +356,7 @@ public class Board : MonoBehaviour
 
         if (pieceToClear != null)
         {
+            pieceToClear.transform.DOKill();
             _mAllPieces[x,y] = null;
             Destroy(pieceToClear.gameObject);
         }
@@ -431,7 +443,10 @@ public class Board : MonoBehaviour
         _isPlayerInputEnabled = false;
         
         await ClearAndCollapseBoard(gamePieces);
-        UniTask.Yield();
+        await UniTask.Yield();
+
+        FillBoardRandomGamePiece(10,.2f);
+        await UniTask.Yield();
 
         _isPlayerInputEnabled = true;
         _isClearAndRefillRunning = false;
