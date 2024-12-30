@@ -190,28 +190,38 @@ public class Board : MonoBehaviour
         _isSwitching = true;
         
         GamePieces clickedPiece = _mAllPieces[clickedTile.xIndex, clickedTile.yIndex]; 
-        GamePieces targetPiece = _mAllPieces[targetTile.xIndex, targetTile.yIndex];
-
-        clickedPiece.MovePiece(_targetTile.xIndex, _targetTile.yIndex, swapTime); 
-        targetPiece.MovePiece(_clickedTile.xIndex, _clickedTile.yIndex, swapTime);
-        await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
+        GamePieces targetPiece  = _mAllPieces[targetTile.xIndex, targetTile.yIndex];
         
-        List<GamePieces> clickedPieceMatches = FindMatchesAt(clickedTile.xIndex, clickedTile.yIndex); 
-        List<GamePieces> targetPieceMatches = FindMatchesAt(targetTile.xIndex, targetTile.yIndex);
-        if (clickedPieceMatches.Count == 0 && targetPieceMatches.Count == 0) 
+        _mAllPieces[clickedTile.xIndex, clickedTile.yIndex] = targetPiece;
+        _mAllPieces[targetTile.xIndex, targetTile.yIndex]   = clickedPiece;
+        
+        clickedPiece.MovePiece(targetTile.xIndex, targetTile.yIndex, swapTime); 
+        targetPiece.MovePiece(clickedTile.xIndex, clickedTile.yIndex, swapTime);
+        
+        await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
+    
+        List<GamePieces> allMatches = FindAllMatchesOnBoard();
+
+        if (allMatches.Count == 0) 
         { 
+            _mAllPieces[clickedTile.xIndex, clickedTile.yIndex] = clickedPiece;
+            _mAllPieces[targetTile.xIndex, targetTile.yIndex]   = targetPiece;
+
             clickedPiece.MovePiece(clickedTile.xIndex, clickedTile.yIndex, swapTime); 
             targetPiece.MovePiece(targetTile.xIndex, targetTile.yIndex, swapTime);
+
+            await UniTask.Delay(TimeSpan.FromSeconds(swapTime));
         }
         else 
         { 
-            await UniTask.Delay(TimeSpan.FromSeconds(swapTime)); 
-            ClearAndRefillBoard(clickedPieceMatches.Union(targetPieceMatches).ToList()).Forget();
+            await UniTask.Delay(TimeSpan.FromSeconds(0.2f)); 
+            ClearAndRefillBoard(allMatches).Forget();
         }
         
         _isSwitching = false;
         _isPlayerInputEnabled = true; 
     }
+
 
     private bool IsNextTo(Tile start, Tile end)
     {
@@ -313,6 +323,28 @@ public class Board : MonoBehaviour
         }
 
         return matches;
+    }
+    
+    private List<GamePieces> FindAllMatchesOnBoard(int minLength = 3)
+    {
+        List<GamePieces> allMatches = new List<GamePieces>();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (_mAllPieces[x, y] != null)
+                {
+                    var matchesAtCell = FindMatchesAt(x, y, minLength);
+                    if (matchesAtCell != null && matchesAtCell.Count > 0)
+                    {
+                        allMatches = allMatches.Union(matchesAtCell).ToList();
+                    }
+                }
+            }
+        }
+
+        return allMatches;
     }
 
     private void HighlightTileOff(int x, int y)
@@ -456,16 +488,16 @@ public class Board : MonoBehaviour
     {
         List<GamePieces> movingPieces = new List<GamePieces>();
         List<GamePieces> matches = new List<GamePieces>();
-        await UniTask.Delay(TimeSpan.FromSeconds(0.25f));
+        await UniTask.Delay(TimeSpan.FromSeconds(0.2f));
         
         bool isFinished = false;
         while (!isFinished)
         {
             ClearPieceAt(gamePieces);
-            await UniTask.Delay(250); 
+            await UniTask.Delay(TimeSpan.FromSeconds(0.2f));
             
             movingPieces = await CollapseColumn(gamePieces);
-            await UniTask.Delay(250);
+            await UniTask.Delay(TimeSpan.FromSeconds(0.2f));
             
             matches = FindMatchesAt(movingPieces);
 
